@@ -1,0 +1,174 @@
+<launch>
+  <!-- where rosbag record will save (prefix) -->
+  <arg name="bagfileout" default="/ros/catkin_ws/taketwo"/>
+
+  <!-- initial conditions -->
+  <param name="/leadcar/x0" type="double" value="20.0" />
+  <param name="/egocar/v0"  type="double" value="0.0" />
+  <param name="/egocar/x0"  type="double" value="0.0"  />
+
+  <!-- additional ego cars initial conditions (can tweak if desired) -->
+  <param name="/car2/v0"  type="double" value="0.0" />
+  <param name="/car2/x0"  type="double" value="0.0"  />
+  <param name="/car3/v0"  type="double" value="0.0" />
+  <param name="/car3/x0"  type="double" value="0.0"  />
+  <param name="/car4/v0"  type="double" value="0.0" />
+  <param name="/car4/x0"  type="double" value="0.0"  />
+
+  <!-- play lead-car speed from a bag (change path if needed) -->
+  <node pkg="rosbag" type="play" name="rosbag_player"
+        args="/ros/catkin_ws/2025_10_30_15_59_56_2T3MWRFVXLW056972taketwo_hwil.bag --topics /car/state/vel_x -s 200">
+    <remap from="/car/state/vel_x" to="/leadcar/car/state/vel_x" />
+  </node>
+
+  <!-- lead car, namespaced -->
+  <group ns="leadcar">
+    <node pkg="odometer" type="odometer" name="odometer_leadcar">
+      <remap from="vel_x" to="car/state/vel_x" />
+      <remap from="odom"  to="odom_x" />
+    </node>
+  </group>
+
+  <!-- ===================== -->
+  <!-- Follower 1: egocar    -->
+  <!-- follows: leadcar      -->
+  <!-- ===================== -->
+  <group ns="egocar">
+    <arg name="leader" default="leadcar"/>
+    <arg name="myname" default="egocar"/>
+
+    <!-- vehicle dynamics -->
+    <node pkg="carsimplesimulink" type="carsimplesimulink" name="carsimplesimulink_node">
+      <remap from="vel_x" to="car/state/vel_x" />
+    </node>
+
+    <!-- Simulink controller (same as before, just parameterized) -->
+    <node pkg="taketwo" type="taketwo" name="taketwo_node" output="screen">
+      <!-- taketwo subscribes to these ABSOLUTE names in your model: -->
+      <!-- /ego/vel_x  -> ego car longitudinal speed -->
+      <remap from="/ego/vel_x"        to="/$(arg myname)/car/state/vel_x"/>
+      <!-- /leadcar/vel_x -> leader speed (here: leadcar) -->
+      <remap from="/leadcar/vel_x"    to="/$(arg leader)/car/state/vel_x"/>
+      <!-- /egocar/lead_dist -> gap measurement (reuse name, remap per ego car) -->
+      <remap from="/egocar/lead_dist" to="/$(arg myname)/lead_dist"/>
+      <!-- controller output accel command sent to this ego car -->
+      <remap from="/cmd_accel"        to="/$(arg myname)/cmd_accel"/>
+    </node>
+
+    <!-- relative velocity: dv = v_lead - v_ego -->
+    <node pkg="subtractor" type="subtractor" name="subtractor_relvel">
+      <remap from="in1"  to="/$(arg leader)/car/state/vel_x" />   <!-- leader -->
+      <remap from="in2"  to="/$(arg myname)/car/state/vel_x" />   <!-- ego   -->
+      <remap from="diff" to="/$(arg myname)/rel_vel" />
+    </node>
+
+    <!-- distance gap: x_lead - x_ego -->
+    <node pkg="subtractor" type="subtractor" name="subtractor_odom">
+      <remap from="in1"  to="/$(arg leader)/odom_x" />
+      <remap from="in2"  to="/$(arg myname)/odom_x" />
+      <remap from="diff" to="/$(arg myname)/lead_dist" />
+    </node>
+  </group>
+
+  <!-- ===================== -->
+  <!-- Follower 2: car2      -->
+  <!-- follows: egocar       -->
+  <!-- ===================== -->
+  <group ns="car2">
+    <arg name="leader" default="egocar"/>
+    <arg name="myname" default="car2"/>
+
+    <node pkg="carsimplesimulink" type="carsimplesimulink" name="carsimplesimulink_node">
+      <remap from="vel_x" to="car/state/vel_x" />
+    </node>
+
+    <node pkg="taketwo" type="taketwo" name="taketwo_node" output="screen">
+      <remap from="/ego/vel_x"        to="/$(arg myname)/car/state/vel_x"/>
+      <!-- now car2 sees egocar as "leader" -->
+      <remap from="/leadcar/vel_x"    to="/$(arg leader)/car/state/vel_x"/>
+      <remap from="/egocar/lead_dist" to="/$(arg myname)/lead_dist"/>
+      <remap from="/cmd_accel"        to="/$(arg myname)/cmd_accel"/>
+    </node>
+
+    <node pkg="subtractor" type="subtractor" name="subtractor_relvel">
+      <remap from="in1"  to="/$(arg leader)/car/state/vel_x" />
+      <remap from="in2"  to="/$(arg myname)/car/state/vel_x" />
+      <remap from="diff" to="/$(arg myname)/rel_vel" />
+    </node>
+
+    <node pkg="subtractor" type="subtractor" name="subtractor_odom">
+      <remap from="in1"  to="/$(arg leader)/odom_x" />
+      <remap from="in2"  to="/$(arg myname)/odom_x" />
+      <remap from="diff" to="/$(arg myname)/lead_dist" />
+    </node>
+  </group>
+
+  <!-- ===================== -->
+  <!-- Follower 3: car3      -->
+  <!-- follows: car2         -->
+  <!-- ===================== -->
+  <group ns="car3">
+    <arg name="leader" default="car2"/>
+    <arg name="myname" default="car3"/>
+
+    <node pkg="carsimplesimulink" type="carsimplesimulink" name="carsimplesimulink_node">
+      <remap from="vel_x" to="car/state/vel_x" />
+    </node>
+
+    <node pkg="taketwo" type="taketwo" name="taketwo_node" output="screen">
+      <remap from="/ego/vel_x"        to="/$(arg myname)/car/state/vel_x"/>
+      <!-- car3's leader is car2 -->
+      <remap from="/leadcar/vel_x"    to="/$(arg leader)/car/state/vel_x"/>
+      <remap from="/egocar/lead_dist" to="/$(arg myname)/lead_dist"/>
+      <remap from="/cmd_accel"        to="/$(arg myname)/cmd_accel"/>
+    </node>
+
+    <node pkg="subtractor" type="subtractor" name="subtractor_relvel">
+      <remap from="in1"  to="/$(arg leader)/car/state/vel_x" />
+      <remap from="in2"  to="/$(arg myname)/car/state/vel_x" />
+      <remap from="diff" to="/$(arg myname)/rel_vel" />
+    </node>
+
+    <node pkg="subtractor" type="subtractor" name="subtractor_odom">
+      <remap from="in1"  to="/$(arg leader)/odom_x" />
+      <remap from="in2"  to="/$(arg myname)/odom_x" />
+      <remap from="diff" to="/$(arg myname)/lead_dist" />
+    </node>
+  </group>
+
+  <!-- ===================== -->
+  <!-- Follower 4: car4      -->
+  <!-- follows: car3         -->
+  <!-- ===================== -->
+  <group ns="car4">
+    <arg name="leader" default="car3"/>
+    <arg name="myname" default="car4"/>
+
+    <node pkg="carsimplesimulink" type="carsimplesimulink" name="carsimplesimulink_node">
+      <remap from="vel_x" to="car/state/vel_x" />
+    </node>
+
+    <node pkg="taketwo" type="taketwo" name="taketwo_node" output="screen">
+      <remap from="/ego/vel_x"        to="/$(arg myname)/car/state/vel_x"/>
+      <!-- car4's leader is car3 -->
+      <remap from="/leadcar/vel_x"    to="/$(arg leader)/car/state/vel_x"/>
+      <remap from="/egocar/lead_dist" to="/$(arg myname)/lead_dist"/>
+      <remap from="/cmd_accel"        to="/$(arg myname)/cmd_accel"/>
+    </node>
+
+    <node pkg="subtractor" type="subtractor" name="subtractor_relvel">
+      <remap from="in1"  to="/$(arg leader)/car/state/vel_x" />
+      <remap from="in2"  to="/$(arg myname)/car/state/vel_x" />
+      <remap from="diff" to="/$(arg myname)/rel_vel" />
+    </node>
+
+    <node pkg="subtractor" type="subtractor" name="subtractor_odom">
+      <remap from="in1"  to="/$(arg leader)/odom_x" />
+      <remap from="in2"  to="/$(arg myname)/odom_x" />
+      <remap from="diff" to="/$(arg myname)/lead_dist" />
+    </node>
+  </group>
+
+  <!-- record everything with a timestamped prefix -->
+  <node pkg="rosbag" type="record" name="rosbag_recorder" args="-a -o $(arg bagfileout)" />
+</launch>
