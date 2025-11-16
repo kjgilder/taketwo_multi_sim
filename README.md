@@ -5,14 +5,8 @@ This repository contains all launch files, controller models, and anlaysis noteb
 
 Repository Structure:
 
-**launch/taketwoDocker_multi.launch** : ROS multi-vehicle platoon launch file
-
-
-**controllers/**
-    **taketwo_v1.slx** : Controller used in real-road test and Verison 1 of the large scale simulation doc
-    **taketwo_v2.slx** : Updated controlelr with revised tau/alpha + buffer and Version 2 of the large scale simulation doc
-
-
-**notebooks/**
-    **taketwo_Large_Scale_Analysis.ipynb** : Analysis of bag-file output for Version 1 and 2
-    **taketwo_Large_Scale_Sim.ipynb** : Python recreation of the controller and platoon sim (Version 3)
+```
+launch/                     # Multi-vehicle ROS launch files
+controllers/                # Simulink controller versions (v1, v2)
+notebooks/                  # Jupyter notebooks (analysis + Python platoon sim)
+```
